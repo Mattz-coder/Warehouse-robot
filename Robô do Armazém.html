@@ -1,0 +1,573 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Robô do Armazém</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Saira:wght@500;700&display=swap">
+<style>
+  /* Tema único e claro de propósito: chão de concreto, caixas de madeira, faixas de segurança */
+  :root {
+    color-scheme: light;
+    --fundo: #efece6;
+    --tinta: #25262b;
+    --suave: #6a6a70;
+    --concreto: #d9d6cf;
+    --concreto2: #d2cec6;
+    --parede: #4b4f58;
+    --parede-luz: #626772;
+    --parede-sombra: #363940;
+    --laranja: #f2a33a;
+    --verde: #3fbf6a;
+    --papel: #fbfaf7;
+    --cell: 48px;
+  }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0;
+    background: var(--fundo);
+    color: var(--tinta);
+    font: 500 16px/1.4 "Saira", system-ui, sans-serif;
+    padding-inline: 16px;
+    display: flex; justify-content: center;
+  }
+  .app { width: 100%; max-width: 640px; padding-block: 16px 28px; display: flex; flex-direction: column; gap: 14px; }
+  button { font: inherit; color: inherit; }
+
+  header { display: flex; align-items: center; gap: 12px; }
+  .faixa {
+    width: 46px; height: 46px; flex: none; border-radius: 8px;
+    background: repeating-linear-gradient(45deg, var(--laranja) 0 8px, var(--tinta) 8px 16px);
+    border: 3px solid var(--tinta);
+  }
+  h1 { margin: 0; font: 32px/1 "Saira Stencil One", "Arial Black", sans-serif; letter-spacing: .02em; }
+  .sub { margin: 3px 0 0; color: var(--suave); font-size: 14px; }
+
+  .painel { display: flex; gap: 8px; flex-wrap: wrap; }
+  .caixa-info {
+    background: var(--papel);
+    border: 2px solid #dcd8cf;
+    border-radius: 10px;
+    padding: 4px 12px;
+    display: flex; flex-direction: column; justify-content: center;
+    flex: 1 1 0; min-width: 0;
+  }
+  .caixa-info.fase { flex: 0 0 auto; flex-direction: row; align-items: center; padding: 2px; }
+  .caixa-info.fase > div { display: flex; flex-direction: column; align-items: center; padding: 2px 6px; }
+  .rotulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--suave); white-space: nowrap; }
+  .valor { font: 22px/1.1 "Saira Stencil One", "Arial Black", sans-serif; font-variant-numeric: tabular-nums; }
+  .seta { width: 30px; height: 38px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font-size: 14px; }
+  .seta:hover:not(:disabled) { background: #e8e4dc; }
+  .seta:disabled { opacity: .25; cursor: default; }
+
+  /* ---------- Armazém ---------- */
+  .palco { display: flex; justify-content: center; touch-action: none; }
+  .armazem {
+    position: relative;
+    width: calc(var(--cell) * var(--cols));
+    height: calc(var(--cell) * var(--rows));
+    user-select: none; -webkit-user-select: none;
+  }
+  .piso { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(var(--cols), var(--cell)); grid-auto-rows: var(--cell); }
+  .t { position: relative; }
+  .t.chao { background: var(--concreto); cursor: pointer; }
+  .t.chao.x { background: var(--concreto2); }
+  .t.chao::after { content: ""; position: absolute; inset: 0; border: 1px solid rgba(0,0,0,.05); }
+  .t.parede {
+    background: var(--parede);
+    box-shadow: inset 3px 3px 0 var(--parede-luz), inset -3px -3px 0 var(--parede-sombra);
+  }
+  .t.parede::before, .t.parede::after {
+    content: ""; position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--parede-sombra);
+    top: 18%; left: 18%;
+  }
+  .t.parede::after { top: auto; left: auto; bottom: 18%; right: 18%; }
+  .t.fora { background: transparent; }
+  .t.alvo::before {
+    content: ""; position: absolute; inset: 18%;
+    border-radius: 6px;
+    background: repeating-linear-gradient(45deg, var(--laranja) 0 5px, var(--tinta) 5px 10px);
+    opacity: .85;
+  }
+
+  .obj {
+    position: absolute; left: 0; top: 0;
+    width: var(--cell); height: var(--cell);
+    transition: transform .11s linear;
+    pointer-events: none;
+  }
+  .obj svg { display: block; width: 100%; height: 100%; }
+  .caixa .cinta { fill: #8a5a2b; transition: fill .2s; }
+  .caixa.certa .cinta { fill: var(--verde); }
+  .caixa.certa svg { filter: drop-shadow(0 0 5px rgba(63,191,106,.7)); }
+  .robo svg { transition: transform .1s; }
+  .robo.esq svg { transform: scaleX(-1); }
+  .robo.bateu { animation: nao .2s; }
+  @keyframes nao { 30% { translate: 3px 0; } 70% { translate: -3px 0; } }
+
+  /* ---------- Controles ---------- */
+  .controles { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
+  .botoes { display: flex; flex-direction: column; gap: 8px; }
+  .btn {
+    min-height: 46px; padding: 0 14px;
+    border-radius: 10px;
+    border: 2px solid var(--tinta);
+    background: var(--papel);
+    font-weight: 700; font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 3px 0 var(--tinta);
+  }
+  .btn:active { transform: translateY(3px); box-shadow: none; }
+  .btn.forte { background: var(--laranja); }
+  .btn kbd { font: 700 11px/1 "Saira", sans-serif; opacity: .55; margin-left: 4px; }
+  .dpad { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); gap: 4px; }
+  .dpad button {
+    border: 2px solid var(--tinta); border-radius: 10px;
+    background: var(--papel); font-size: 20px; cursor: pointer;
+    box-shadow: 0 3px 0 var(--tinta);
+  }
+  .dpad button:active { transform: translateY(3px); box-shadow: none; background: var(--laranja); }
+  .dpad .c { grid-column: 2; }
+  .dpad .up { grid-row: 1; } .dpad .dn { grid-row: 3; }
+  .dpad .lf { grid-row: 2; grid-column: 1; } .dpad .rt { grid-row: 2; grid-column: 3; }
+  button:focus-visible { outline: 3px solid var(--laranja); outline-offset: 3px; }
+
+  .regras { margin: 0; color: var(--suave); font-size: 15px; max-width: 64ch; }
+  .regras b { color: var(--tinta); }
+
+  /* ---------- Vitória ---------- */
+  .vitoria { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(37,38,43,.45); padding: 16px; }
+  .cartao {
+    background: var(--papel); border: 3px solid var(--tinta); border-radius: 14px;
+    padding: 18px 20px; text-align: center; max-width: 330px; width: 100%;
+    box-shadow: 0 6px 0 var(--tinta);
+    animation: surge .35s cubic-bezier(.3,1.6,.5,1);
+  }
+  @keyframes surge { from { transform: scale(.6); opacity: 0; } }
+  .cartao h2 { margin: 0; font: 26px/1.1 "Saira Stencil One", "Arial Black", sans-serif; }
+  .estrelas { font-size: 40px; letter-spacing: 6px; line-height: 1.1; margin: 8px 0 2px; }
+  .estrelas .on { color: var(--laranja); }
+  .estrelas .off { color: #e1ddd4; }
+  .cartao p { margin: 0 0 14px; color: var(--suave); }
+  .cartao .lista { display: grid; gap: 8px; }
+
+  @media (max-width: 460px) {
+    h1 { font-size: 26px; }
+    .valor { font-size: 18px; }
+    .caixa-info { padding: 4px 8px; }
+    .rotulo { letter-spacing: .03em; font-size: 10px; }
+    .dpad { grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .obj, .robo svg { transition: none; }
+    .cartao, .robo.bateu { animation: none; }
+  }
+</style>
+
+<div class="app">
+  <header>
+    <div class="faixa" aria-hidden="true"></div>
+    <div>
+      <h1>Robô do Armazém</h1>
+      <p class="sub">Empurre todas as caixas até as marcas listradas</p>
+    </div>
+  </header>
+
+  <div class="painel">
+    <div class="caixa-info fase">
+      <button class="seta" id="anterior" aria-label="Fase anterior">◀</button>
+      <div><span class="rotulo">Fase</span><span class="valor" id="nivel">1</span></div>
+      <button class="seta" id="proxima" aria-label="Próxima fase">▶</button>
+    </div>
+    <div class="caixa-info"><span class="rotulo">Caixas</span><span class="valor" id="caixas">0/0</span></div>
+    <div class="caixa-info"><span class="rotulo">Passos</span><span class="valor" id="passos">0</span></div>
+    <div class="caixa-info"><span class="rotulo">Empurrões</span><span class="valor" id="empurroes">0</span></div>
+  </div>
+
+  <div class="palco" id="palco">
+    <div class="armazem" id="armazem">
+      <div class="piso" id="piso"></div>
+    </div>
+  </div>
+
+  <div class="controles">
+    <div class="botoes">
+      <button class="btn forte" id="desfazer">Desfazer <kbd>Z</kbd></button>
+      <button class="btn" id="recomecar">Recomeçar <kbd>R</kbd></button>
+    </div>
+    <div class="dpad" aria-label="Setas">
+      <button class="c up" data-d="0" aria-label="Cima">▲</button>
+      <button class="lf" data-d="3" aria-label="Esquerda">◀</button>
+      <button class="rt" data-d="1" aria-label="Direita">▶</button>
+      <button class="c dn" data-d="2" aria-label="Baixo">▼</button>
+    </div>
+  </div>
+
+  <p class="regras">
+    <b>Mova o robô</b> com as setas do teclado, os botões, deslizando o dedo no armazém ou tocando no chão para ele andar até lá. O robô <b>só empurra</b>, nunca puxa, e só uma caixa por vez. Cuidado: caixa empurrada para um canto não sai mais. Se isso acontecer, use o <b>Desfazer</b>.
+  </p>
+</div>
+
+<script>
+/* =========================================================
+   ROBÔ DO ARMAZÉM — Sokoban em HTML + CSS + JavaScript puro
+   ========================================================= */
+
+const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]]; // cima, direita, baixo, esquerda
+const PAREDE = 1, CHAO = 0;
+
+/* ---------- Números aleatórios com semente ---------- */
+function criarAleatorio(semente) {
+  return function () {
+    semente |= 0; semente = (semente + 0x6D2B79F5) | 0;
+    let t = Math.imul(semente ^ (semente >>> 15), 1 | semente);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ---------- Gerador de fases "de trás para frente" ----------
+   1. Faz uma sala e coloca as caixas JÁ em cima das marcas.
+   2. O robô passeia ao acaso e, às vezes, PUXA a caixa que está atrás dele.
+      Puxar é o contrário de empurrar: então dá para desfazer tudo empurrando.
+   3. Onde ninguém passou vira parede, para a fase ficar enxuta.
+   Resultado: toda fase tem solução garantida. */
+function gerarFase(nivel) {
+  const aleatorio = criarAleatorio(nivel * 48271 + 11);
+  const larg = Math.min(5 + Math.floor(nivel / 2), 10);
+  const alt = Math.min(5 + Math.floor((nivel + 1) / 3), 9);
+  const qtdCaixas = Math.min(1 + Math.floor((nivel + 1) / 3), 6);
+  const passos = 250 + nivel * 90;
+  const L = larg + 2, A = alt + 2;
+  const idx = (r, c) => r * L + c;
+
+  let melhor = null;
+  for (let tentativa = 0; tentativa < 120; tentativa++) {
+    // Sala com borda de parede e alguns pilares no meio
+    const mapa = Array(L * A).fill(CHAO);
+    for (let r = 0; r < A; r++) for (let c = 0; c < L; c++)
+      if (r === 0 || c === 0 || r === A - 1 || c === L - 1) mapa[idx(r, c)] = PAREDE;
+    const pilares = Math.floor(larg * alt * (0.08 + aleatorio() * 0.08));
+    for (let k = 0; k < pilares; k++) mapa[idx(1 + Math.floor(aleatorio() * alt), 1 + Math.floor(aleatorio() * larg))] = PAREDE;
+
+    const chao = [];
+    mapa.forEach((v, i) => v === CHAO && chao.push(i));
+    if (!conectado(mapa, L, chao)) continue;
+
+    // Marcas (com as caixas em cima) e posição do robô
+    const livres = [...chao];
+    const pegar = () => livres.splice(Math.floor(aleatorio() * livres.length), 1)[0];
+    const alvos = Array.from({ length: qtdCaixas }, pegar);
+    let caixas = [...alvos];
+    let robo = pegar();
+    const visitado = new Set([robo, ...alvos]);
+    let puxoes = 0, ultima = 0;
+
+    for (let s = 0; s < passos; s++) {
+      const d = aleatorio() < 0.55 ? ultima : Math.floor(aleatorio() * 4);
+      ultima = d;
+      const [dr, dc] = DIRS[d];
+      const r = Math.floor(robo / L), c = robo % L;
+      const frente = idx(r + dr, c + dc), atras = idx(r - dr, c - dc);
+      if (mapa[frente] === PAREDE || caixas.includes(frente)) continue;
+      const k = caixas.indexOf(atras);
+      if (k >= 0 && aleatorio() < 0.75) { caixas[k] = robo; puxoes++; }
+      robo = frente;
+      visitado.add(robo);
+    }
+
+    const foraDoLugar = caixas.filter(b => !alvos.includes(b)).length;
+    if (foraDoLugar < Math.max(1, qtdCaixas - Math.floor(qtdCaixas / 3))) continue;
+    const distancia = caixas.reduce((soma, b) => {
+      const br = Math.floor(b / L), bc = b % L;
+      return soma + Math.min(...alvos.map(a => Math.abs(Math.floor(a / L) - br) + Math.abs(a % L - bc)));
+    }, 0);
+    const nota = distancia * 3 + foraDoLugar * 5 + Math.min(puxoes, 60) * 0.2;
+    if (!melhor || nota > melhor.nota) melhor = { mapa, L, A, alvos, caixas, robo, visitado, puxoes, nota };
+  }
+
+  // Onde ninguém passou vira parede; depois recorta as bordas sobrando
+  const { mapa, L: L0, A: A0, visitado } = melhor;
+  const final = mapa.map((v, i) => (visitado.has(i) ? CHAO : PAREDE));
+  let r0 = A0, r1 = 0, c0 = L0, c1 = 0;
+  visitado.forEach(i => { const r = Math.floor(i / L0), c = i % L0; r0 = Math.min(r0, r); r1 = Math.max(r1, r); c0 = Math.min(c0, c); c1 = Math.max(c1, c); });
+  r0--; r1++; c0--; c1++;
+  const novaL = c1 - c0 + 1, novaA = r1 - r0 + 1;
+  const conv = i => (Math.floor(i / L0) - r0) * novaL + (i % L0 - c0);
+  const mapaFinal = [];
+  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) mapaFinal.push(final[r * L0 + c]);
+
+  // Parede que não encosta em nenhum chão fica invisível (fora do armazém)
+  const tipo = mapaFinal.map((v, i) => {
+    if (v === CHAO) return "chao";
+    const r = Math.floor(i / novaL), c = i % novaL;
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const rr = r + dr, cc = c + dc;
+      if (rr >= 0 && rr < novaA && cc >= 0 && cc < novaL && mapaFinal[rr * novaL + cc] === CHAO) return "parede";
+    }
+    return "fora";
+  });
+
+  return {
+    L: novaL, A: novaA, tipo,
+    alvos: melhor.alvos.map(conv),
+    caixas: melhor.caixas.map(conv),
+    robo: conv(melhor.robo),
+    meta: melhor.puxoes,
+  };
+}
+
+function conectado(mapa, L, chao) {
+  const visto = new Set([chao[0]]), fila = [chao[0]];
+  while (fila.length) {
+    const i = fila.pop();
+    for (const [dr, dc] of DIRS) {
+      const j = i + dr * L + dc;
+      if (mapa[j] === CHAO && !visto.has(j)) { visto.add(j); fila.push(j); }
+    }
+  }
+  return visto.size === chao.length;
+}
+
+/* ---------- Desenhos ---------- */
+const SVG_CAIXA = `<svg viewBox="0 0 100 100" aria-hidden="true">
+  <rect x="7" y="9" width="86" height="86" rx="6" fill="rgba(0,0,0,.18)"/>
+  <rect x="6" y="5" width="88" height="86" rx="6" fill="#c98b4a" stroke="#6b421d" stroke-width="4"/>
+  <path d="M10 32 H90 M10 64 H90" stroke="#a8702f" stroke-width="3"/>
+  <path class="cinta" d="M14 13 L86 83 L78 85 L10 19Z M86 13 L14 83 L22 85 L90 19Z"/>
+  <rect x="6" y="5" width="88" height="86" rx="6" fill="none" stroke="#6b421d" stroke-width="4"/>
+</svg>`;
+
+const SVG_ROBO = `<svg viewBox="0 0 100 100" aria-hidden="true">
+  <ellipse cx="50" cy="90" rx="30" ry="6" fill="rgba(0,0,0,.18)"/>
+  <rect x="47" y="4" width="6" height="14" fill="#25262b"/><circle cx="50" cy="6" r="6" fill="#ff5a4e" stroke="#25262b" stroke-width="3"/>
+  <rect x="16" y="16" width="68" height="62" rx="16" fill="#f2c230" stroke="#25262b" stroke-width="4"/>
+  <rect x="26" y="26" width="48" height="30" rx="8" fill="#25262b"/>
+  <rect x="38" y="34" width="8" height="12" rx="3" fill="#5fe0ff"/><rect x="56" y="34" width="8" height="12" rx="3" fill="#5fe0ff"/>
+  <path d="M30 64 H70" stroke="#25262b" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 6"/>
+  <rect x="82" y="40" width="12" height="22" rx="3" fill="#8b8f99" stroke="#25262b" stroke-width="3"/>
+  <circle cx="30" cy="84" r="9" fill="#25262b"/><circle cx="70" cy="84" r="9" fill="#25262b"/>
+  <circle cx="30" cy="84" r="3" fill="#8b8f99"/><circle cx="70" cy="84" r="3" fill="#8b8f99"/>
+</svg>`;
+
+/* ---------- Estado ---------- */
+const $ = id => document.getElementById(id);
+let fase, jogo, elCaixas = [], elRobo, andando = null;
+
+function lerProgresso() {
+  try { return JSON.parse(localStorage.getItem("roboArmazem")) || { nivel: 1, maximo: 1 }; }
+  catch { return { nivel: 1, maximo: 1 }; }
+}
+function salvarProgresso() { try { localStorage.setItem("roboArmazem", JSON.stringify(progresso)); } catch {} }
+let progresso = lerProgresso();
+
+function iniciarFase(nivel) {
+  pararCaminhada();
+  document.querySelector(".vitoria")?.remove();
+  fase = { nivel, ...gerarFase(nivel) };
+  jogo = { robo: fase.robo, caixas: [...fase.caixas], passos: 0, empurroes: 0, historico: [], venceu: false, olhandoEsq: false };
+  progresso.nivel = nivel; salvarProgresso();
+  montar();
+  ajustarTamanho();
+  desenhar();
+}
+
+function montar() {
+  const arm = $("armazem");
+  arm.style.setProperty("--cols", fase.L);
+  arm.style.setProperty("--rows", fase.A);
+  $("piso").innerHTML = fase.tipo.map((t, i) => {
+    const r = Math.floor(i / fase.L), c = i % fase.L;
+    const cls = ["t", t];
+    if (t === "chao" && (r + c) % 2) cls.push("x");
+    if (fase.alvos.includes(i)) cls.push("alvo");
+    return `<div class="${cls.join(" ")}" data-i="${i}"></div>`;
+  }).join("");
+  arm.querySelectorAll(".obj").forEach(e => e.remove());
+  elCaixas = jogo.caixas.map(() => {
+    const e = document.createElement("div");
+    e.className = "obj caixa"; e.innerHTML = SVG_CAIXA; arm.appendChild(e); return e;
+  });
+  elRobo = document.createElement("div");
+  elRobo.className = "obj robo"; elRobo.innerHTML = SVG_ROBO; arm.appendChild(elRobo);
+}
+
+let tamanho = 48;
+function ajustarTamanho() {
+  if (!fase) return;
+  const largura = document.querySelector(".app").clientWidth;
+  const altura = Math.max(innerHeight - 330, 280);
+  tamanho = Math.max(26, Math.min(60, Math.floor(Math.min(largura / fase.L, altura / fase.A))));
+  document.documentElement.style.setProperty("--cell", tamanho + "px");
+  desenhar(true);
+}
+
+function posicionar(el, i, semAnimar) {
+  const r = Math.floor(i / fase.L), c = i % fase.L;
+  if (semAnimar) el.style.transition = "none";
+  el.style.transform = `translate(${c * tamanho}px, ${r * tamanho}px)`;
+  if (semAnimar) { void el.offsetWidth; el.style.transition = ""; }
+}
+
+function desenhar(semAnimar = false) {
+  jogo.caixas.forEach((b, k) => {
+    posicionar(elCaixas[k], b, semAnimar);
+    elCaixas[k].classList.toggle("certa", fase.alvos.includes(b));
+  });
+  posicionar(elRobo, jogo.robo, semAnimar);
+  elRobo.classList.toggle("esq", jogo.olhandoEsq);
+  const certas = jogo.caixas.filter(b => fase.alvos.includes(b)).length;
+  $("nivel").textContent = fase.nivel;
+  $("caixas").textContent = `${certas}/${jogo.caixas.length}`;
+  $("passos").textContent = jogo.passos;
+  $("empurroes").textContent = jogo.empurroes;
+  $("anterior").disabled = fase.nivel <= 1;
+  $("proxima").disabled = fase.nivel >= progresso.maximo;
+}
+
+/* ---------- A regra do Sokoban ----------
+   - Chão livre na frente: anda.
+   - Caixa na frente e chão livre depois dela: empurra.
+   - Qualquer outra coisa: não mexe. */
+function mover(d) {
+  if (jogo.venceu) return false;
+  const [dr, dc] = DIRS[d];
+  const passo = dr * fase.L + dc;
+  const frente = jogo.robo + passo;
+  if (d === 3) jogo.olhandoEsq = true;
+  if (d === 1) jogo.olhandoEsq = false;
+
+  if (fase.tipo[frente] !== "chao") return bater();
+  const k = jogo.caixas.indexOf(frente);
+  if (k >= 0) {
+    const depois = frente + passo;
+    if (fase.tipo[depois] !== "chao" || jogo.caixas.includes(depois)) return bater();
+    guardar();
+    jogo.caixas[k] = depois;
+    jogo.empurroes++;
+  } else {
+    guardar();
+  }
+  jogo.robo = frente;
+  jogo.passos++;
+  desenhar();
+  verificarVitoria();
+  return true;
+}
+
+function bater() {
+  elRobo.classList.remove("bateu"); void elRobo.offsetWidth; elRobo.classList.add("bateu");
+  desenhar();
+  return false;
+}
+
+function guardar() {
+  jogo.historico.push({ robo: jogo.robo, caixas: [...jogo.caixas], passos: jogo.passos, empurroes: jogo.empurroes });
+  if (jogo.historico.length > 2000) jogo.historico.shift();
+}
+
+function desfazer() {
+  pararCaminhada();
+  if (jogo.venceu || !jogo.historico.length) return;
+  Object.assign(jogo, jogo.historico.pop());
+  desenhar();
+}
+
+/* ---------- Tocar no chão: o robô anda sozinho até lá ----------
+   Busca em largura desviando de paredes e caixas. */
+function caminhoAte(destino) {
+  const anterior = new Map([[jogo.robo, null]]);
+  const fila = [jogo.robo];
+  while (fila.length) {
+    const i = fila.shift();
+    if (i === destino) break;
+    DIRS.forEach(([dr, dc], d) => {
+      const j = i + dr * fase.L + dc;
+      if (fase.tipo[j] === "chao" && !jogo.caixas.includes(j) && !anterior.has(j)) { anterior.set(j, [i, d]); fila.push(j); }
+    });
+  }
+  if (!anterior.has(destino)) return null;
+  const direcoes = [];
+  for (let i = destino; anterior.get(i); i = anterior.get(i)[0]) direcoes.unshift(anterior.get(i)[1]);
+  return direcoes;
+}
+
+function pararCaminhada() { if (andando) { clearInterval(andando); andando = null; } }
+
+function tocarCasa(i) {
+  pararCaminhada();
+  if (jogo.venceu || fase.tipo[i] !== "chao") return;
+  const rR = Math.floor(jogo.robo / fase.L), cR = jogo.robo % fase.L;
+  const r = Math.floor(i / fase.L), c = i % fase.L;
+  // Tocou numa caixa encostada: empurra
+  if (Math.abs(r - rR) + Math.abs(c - cR) === 1) {
+    const d = DIRS.findIndex(([dr, dc]) => dr === r - rR && dc === c - cR);
+    return mover(d);
+  }
+  const rota = caminhoAte(i);
+  if (!rota) return bater();
+  andando = setInterval(() => {
+    if (!rota.length || !mover(rota.shift())) pararCaminhada();
+  }, 90);
+}
+
+/* ---------- Vitória ---------- */
+function verificarVitoria() {
+  if (!jogo.caixas.every(b => fase.alvos.includes(b))) return;
+  jogo.venceu = true;
+  pararCaminhada();
+  progresso.maximo = Math.max(progresso.maximo, fase.nivel + 1);
+  salvarProgresso();
+  desenhar();
+  const estrelas = jogo.empurroes <= fase.meta ? 3 : jogo.empurroes <= fase.meta * 2 ? 2 : 1;
+  setTimeout(() => {
+    const tela = document.createElement("div");
+    tela.className = "vitoria";
+    tela.innerHTML = `<div class="cartao" role="dialog" aria-label="Fase concluída">
+      <h2>Armazém arrumado!</h2>
+      <div class="estrelas">${[1, 2, 3].map(k => `<span class="${k <= estrelas ? "on" : "off"}">★</span>`).join("")}</div>
+      <p>${jogo.passos} passos e ${jogo.empurroes} empurrões.${estrelas < 3 ? ` Para 3 estrelas: até ${fase.meta} empurrões.` : ""}</p>
+      <div class="lista">
+        <button class="btn forte" id="seguir">Próxima fase</button>
+        <button class="btn" id="repetir">Jogar de novo</button>
+      </div>
+    </div>`;
+    document.body.appendChild(tela);
+    $("seguir").onclick = () => iniciarFase(fase.nivel + 1);
+    $("repetir").onclick = () => iniciarFase(fase.nivel);
+    $("seguir").focus();
+  }, 350);
+}
+
+/* ---------- Entradas: teclado, botões, toque e deslizar ---------- */
+const TECLAS = { ArrowUp: 0, ArrowRight: 1, ArrowDown: 2, ArrowLeft: 3, w: 0, d: 1, s: 2, a: 3, W: 0, D: 1, S: 2, A: 3 };
+addEventListener("keydown", e => {
+  if (document.querySelector(".vitoria")) return;
+  if (e.key in TECLAS) { e.preventDefault(); pararCaminhada(); mover(TECLAS[e.key]); }
+  else if (e.key === "z" || e.key === "Z" || e.key === "Backspace") { e.preventDefault(); desfazer(); }
+  else if (e.key === "r" || e.key === "R") iniciarFase(fase.nivel);
+});
+document.querySelectorAll(".dpad button").forEach(b => b.onclick = () => { pararCaminhada(); mover(+b.dataset.d); });
+
+let toque = null;
+$("palco").addEventListener("pointerdown", e => { toque = { x: e.clientX, y: e.clientY, alvo: e.target }; });
+$("palco").addEventListener("pointerup", e => {
+  if (!toque) return;
+  const dx = e.clientX - toque.x, dy = e.clientY - toque.y;
+  const alvo = toque.alvo; toque = null;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) > 24) {
+    pararCaminhada();
+    mover(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : 3) : (dy > 0 ? 2 : 0));
+  } else if (alvo.dataset && alvo.dataset.i !== undefined) {
+    tocarCasa(+alvo.dataset.i);
+  }
+});
+
+$("desfazer").onclick = desfazer;
+$("recomecar").onclick = () => iniciarFase(fase.nivel);
+$("anterior").onclick = () => iniciarFase(Math.max(1, fase.nivel - 1));
+$("proxima").onclick = () => iniciarFase(Math.min(progresso.maximo, fase.nivel + 1));
+addEventListener("resize", ajustarTamanho);
+
+iniciarFase(Math.min(progresso.nivel || 1, progresso.maximo || 1));
+</script>
+
+</body></html>
